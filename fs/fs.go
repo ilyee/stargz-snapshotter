@@ -63,6 +63,10 @@ import (
 
 const defaultMaxConcurrency = 2
 
+var (
+	ns *metrics.Namespace
+)
+
 type Option func(*options)
 
 type options struct {
@@ -95,14 +99,11 @@ func NewFilesystem(root string, cfg config.Config, opts ...Option) (_ snapshot.F
 		return nil, errors.Wrapf(err, "failed to setup resolver")
 	}
 
-	var ns *metrics.Namespace
-	if !cfg.NoPrometheus {
+	if !cfg.NoPrometheus && ns == nil {
 		ns = metrics.NewNamespace("stargz", "fs", nil)
-	}
-	c := fsmetrics.NewLayerMetrics(ns)
-	if ns != nil {
 		metrics.Register(ns)
 	}
+	c := fsmetrics.NewLayerMetrics(ns)
 
 	return &filesystem{
 		resolver:              r,

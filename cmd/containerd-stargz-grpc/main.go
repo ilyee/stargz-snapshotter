@@ -32,7 +32,9 @@ import (
 	"github.com/containerd/containerd/contrib/snapshotservice"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/snapshots"
+	"github.com/containerd/stargz-snapshotter/fusemanager"
 	"github.com/containerd/stargz-snapshotter/service"
+	snbase "github.com/containerd/stargz-snapshotter/snapshot"
 	"github.com/containerd/stargz-snapshotter/version"
 	sddaemon "github.com/coreos/go-systemd/v22/daemon"
 	metrics "github.com/docker/go-metrics"
@@ -47,6 +49,7 @@ const (
 	defaultConfigPath = "/etc/containerd-stargz-grpc/config.toml"
 	defaultLogLevel   = logrus.InfoLevel
 	defaultRootDir    = "/var/lib/containerd-stargz-grpc"
+	defaultFuseAddr   = "unix:///run/containerd-stargz-grpc/fuse-manager.sock"
 )
 
 var (
@@ -54,6 +57,7 @@ var (
 	configPath   = flag.String("config", defaultConfigPath, "path to the configuration file")
 	logLevel     = flag.String("log-level", defaultLogLevel.String(), "set the logging level [trace, debug, info, warn, error, fatal, panic]")
 	rootDir      = flag.String("root", defaultRootDir, "path to the root directory for this snapshotter")
+	fuseAddr     = flag.String("fuse-address", defaultFuseAddr, "address for the fuse manager's GRPC server")
 	printVersion = flag.Bool("version", false, "print the version")
 )
 
@@ -97,7 +101,13 @@ func main() {
 		log.G(ctx).WithError(err).Fatalf("snapshotter is not supported")
 	}
 
-	rs, err := service.NewStargzSnapshotterService(ctx, *rootDir, &config.Config)
+	// Create fuse manager client
+	fs, err := fusemanager.NewManagerClient(ctx, *rootDir, *fuseAddr, &config.Config)
+	if err != nil {
+		log.G(ctx).WithError(err).Fatalf("failed to configure fuse manager")
+	}
+
+	rs, err := snbase.NewSnapshotter(ctx, *rootDir, fs, snbase.AsynchronousRemove)
 	if err != nil {
 		log.G(ctx).WithError(err).Fatalf("failed to configure snapshotter")
 	}
@@ -109,7 +119,7 @@ func main() {
 
 	if cleanup {
 		log.G(ctx).Debug("Closing the snapshotter")
-		rs.Close()
+		//rs.Close()
 	}
 	log.G(ctx).Info("Exiting")
 }

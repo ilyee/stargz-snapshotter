@@ -146,10 +146,6 @@ func NewSnapshotter(ctx context.Context, root string, targetFs FileSystem, opts 
 		userxattr:   userxattr,
 	}
 
-	if err := o.restoreRemoteSnapshot(ctx); err != nil {
-		return nil, errors.Wrap(err, "failed to restore remote snapshot")
-	}
-
 	return o, nil
 }
 

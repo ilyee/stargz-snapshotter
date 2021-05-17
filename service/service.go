@@ -28,6 +28,7 @@ import (
 	"github.com/containerd/stargz-snapshotter/fs/source"
 	"github.com/containerd/stargz-snapshotter/service/keychain"
 	"github.com/containerd/stargz-snapshotter/service/resolver"
+	"github.com/containerd/stargz-snapshotter/snapshot"
 	snbase "github.com/containerd/stargz-snapshotter/snapshot"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
@@ -37,27 +38,7 @@ const fusermountBin = "fusermount"
 
 // NewStargzSnapshotterService returns stargz snapshotter.
 func NewStargzSnapshotterService(ctx context.Context, root string, config *Config) (snapshots.Snapshotter, error) {
-	// Prepare kubeconfig-based keychain if required
-	credsFuncs := []func(string) (string, string, error){keychain.NewDockerconfigKeychain(ctx)}
-	if config.KubeconfigKeychainConfig.EnableKeychain {
-		var opts []keychain.KubeconfigOption
-		if kcp := config.KubeconfigKeychainConfig.KubeconfigPath; kcp != "" {
-			opts = append(opts, keychain.WithKubeconfigPath(kcp))
-		}
-		credsFuncs = append(credsFuncs, keychain.NewKubeconfigKeychain(ctx, opts...))
-	}
-
-	// Use RegistryHosts based on ResolverConfig and keychain
-	hosts := resolver.RegistryHostsFromConfig(resolver.Config(config.ResolverConfig), credsFuncs...)
-
-	// Configure filesystem and snapshotter
-	fs, err := stargzfs.NewFilesystem(fsRoot(root),
-		config.Config,
-		stargzfs.WithGetSources(sources(
-			sourceFromCRILabels(hosts),      // provides source info based on CRI labels
-			source.FromDefaultLabels(hosts), // provides source info based on default labels
-		)),
-	)
+	fs, err := NewFileSystem(ctx, root, config)
 	if err != nil {
 		log.G(ctx).WithError(err).Fatalf("failed to configure filesystem")
 	}
@@ -96,4 +77,33 @@ func Supported(root string) error {
 	}
 	// Remote snapshotter is implemented based on overlayfs snapshotter.
 	return overlayutils.Supported(snapshotterRoot(root))
+}
+
+func NewFileSystem(ctx context.Context, root string, config *Config) (snapshot.FileSystem, error) {
+	// Prepare kubeconfig-based keychain if required
+	credsFuncs := []func(string) (string, string, error){keychain.NewDockerconfigKeychain(ctx)}
+	if config.KubeconfigKeychainConfig.EnableKeychain {
+		var opts []keychain.KubeconfigOption
+		if kcp := config.KubeconfigKeychainConfig.KubeconfigPath; kcp != "" {
+			opts = append(opts, keychain.WithKubeconfigPath(kcp))
+		}
+		credsFuncs = append(credsFuncs, keychain.NewKubeconfigKeychain(ctx, opts...))
+	}
+
+	// Use RegistryHosts based on ResolverConfig and keychain
+	hosts := resolver.RegistryHostsFromConfig(resolver.Config(config.ResolverConfig), credsFuncs...)
+
+	// Configure filesystem and snapshotter
+	fs, err := stargzfs.NewFilesystem(fsRoot(root),
+		config.Config,
+		stargzfs.WithGetSources(sources(
+			sourceFromCRILabels(hosts),      // provides source info based on CRI labels
+			source.FromDefaultLabels(hosts), // provides source info based on default labels
+		)),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return fs, nil
 }

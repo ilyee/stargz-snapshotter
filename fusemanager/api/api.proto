@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+option go_package = "stargz-snapshotter/cmd/api";
+
+package stargz_fuse_manager;
+
+service FileSystemService {
+    rpc Init (InitRequest) returns (Response);
+    rpc Mount (MountRequest) returns (Response);
+    rpc Check (CheckRequest) returns (Response);
+    rpc Unmount (UnmountRequest) returns (Response);
+}
+
+message InitRequest {
+    string root = 1;
+    bytes config = 2;
+}
+
+message MountRequest {
+    string mountpoint = 1;
+    map<string, string> labels = 2;
+}
+
+message CheckRequest {
+    string mountpoint = 1;
+    map<string, string> labels = 2;
+}
+
+message UnmountRequest {
+    string mountpoint = 1;
+}
+
+message Response {
+}

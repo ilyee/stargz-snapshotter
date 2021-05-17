@@ -21,7 +21,10 @@ import (
 
 	"github.com/containerd/containerd/platforms"
 	ctdplugin "github.com/containerd/containerd/plugin"
+
+	"github.com/containerd/stargz-snapshotter/fusemanager"
 	"github.com/containerd/stargz-snapshotter/service"
+	snbase "github.com/containerd/stargz-snapshotter/snapshot"
 )
 
 // Config represents configuration for the stargz snapshotter plugin.
@@ -30,6 +33,9 @@ type Config struct {
 
 	// RootPath is the directory for the plugin
 	RootPath string `toml:"root_path"`
+
+	// SockerAddr is the socker address of fuse-manager
+	SockerAddr string `toml:"socket_addr"`
 }
 
 func init() {
@@ -50,7 +56,13 @@ func init() {
 				root = config.RootPath
 			}
 			ic.Meta.Exports["root"] = root
-			return service.NewStargzSnapshotterService(ic.Context, root, &config.Config)
+
+			fs, err := fusemanager.NewManagerClient(ic.Context, root, config.SockerAddr, &config.Config)
+			if err != nil {
+				return nil, errors.New("failed to configure fuse manager")
+			}
+
+			return snbase.NewSnapshotter(ic.Context, root, fs, snbase.AsynchronousRemove)
 		},
 	})
 }
